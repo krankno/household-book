@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Tesseract from 'tesseract.js'
 import WorkTab from './WorkTab'
+import { cloudSave, cloudRestore } from './supabase'
 import './App.css'
 
 const DEFAULT_CATEGORIES = ['식비', '교통', '주거', '통신', '의료', '교육', '문화', '의류', '생활용품', '경조사', '저축/투자', '기타']
@@ -147,19 +148,77 @@ function App() {
   const [analyzeError, setAnalyzeError] = useState('')
   const [ocrText, setOcrText] = useState('')
   const [previewImage, setPreviewImage] = useState(null)
+  const [showCloudSync, setShowCloudSync] = useState(false)
+  const [cloudId, setCloudId] = useState(() => localStorage.getItem('hb-cloud-id') || '')
+  const [cloudStatus, setCloudStatus] = useState('') // '', 'saving', 'saved', 'loading', 'loaded', 'error'
+  const [cloudMessage, setCloudMessage] = useState('')
   const fileInputRef = useRef(null)
+  const saveTimerRef = useRef(null)
+
+  // 클라우드 자동 저장 (디바운스 3초)
+  const triggerAutoSave = useCallback(() => {
+    const userId = localStorage.getItem('hb-cloud-id')
+    if (!userId) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      const ok = await cloudSave(userId)
+      if (ok) {
+        setCloudStatus('saved')
+        setTimeout(() => setCloudStatus(''), 2000)
+      }
+    }, 3000)
+  }, [])
+
+  // 수동 저장
+  async function handleCloudSave() {
+    const id = cloudId.trim()
+    if (!id) return
+    localStorage.setItem('hb-cloud-id', id)
+    setCloudStatus('saving')
+    setCloudMessage('')
+    const ok = await cloudSave(id)
+    if (ok) {
+      setCloudStatus('saved')
+      setCloudMessage('저장 완료!')
+    } else {
+      setCloudStatus('error')
+      setCloudMessage('저장 실패. 다시 시도해주세요.')
+    }
+  }
+
+  // 수동 불러오기
+  async function handleCloudLoad() {
+    const id = cloudId.trim()
+    if (!id) return
+    if (!confirm('클라우드 데이터로 덮어씌워집니다. 계속하시겠습니까?')) return
+    localStorage.setItem('hb-cloud-id', id)
+    setCloudStatus('loading')
+    setCloudMessage('')
+    const ok = await cloudRestore(id)
+    if (ok) {
+      setCloudStatus('loaded')
+      setCloudMessage('불러오기 완료! 새로고침합니다...')
+      setTimeout(() => window.location.reload(), 1000)
+    } else {
+      setCloudStatus('error')
+      setCloudMessage('데이터가 없거나 불러오기 실패.')
+    }
+  }
 
   useEffect(() => {
     localStorage.setItem('household-book', JSON.stringify(entries))
-  }, [entries])
+    triggerAutoSave()
+  }, [entries, triggerAutoSave])
 
   useEffect(() => {
     localStorage.setItem('household-book-categories', JSON.stringify(categories))
-  }, [categories])
+    triggerAutoSave()
+  }, [categories, triggerAutoSave])
 
   useEffect(() => {
     localStorage.setItem('household-book-icons', JSON.stringify(categoryIcons))
-  }, [categoryIcons])
+    triggerAutoSave()
+  }, [categoryIcons, triggerAutoSave])
 
   const monthEntries = useMemo(() => {
     return entries
@@ -354,7 +413,11 @@ function App() {
       <header>
         <div className="header-row">
           <h1>가계부</h1>
-          <button className="settings-btn" onClick={() => setShowCategoryManager(true)}>⚙️</button>
+          <div className="header-btns">
+            {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
+            <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
+            <button className="settings-btn" onClick={() => setShowCategoryManager(true)}>⚙️</button>
+          </div>
         </div>
         <div className="tab-nav">
           <button className={`tab-btn ${activeTab === 'expense' ? 'active' : ''}`} onClick={() => setActiveTab('expense')}>지출</button>
@@ -363,7 +426,7 @@ function App() {
       </header>
 
       {activeTab === 'work' && (
-        <WorkTab currentMonth={currentMonth} changeMonth={changeMonth} monthLabel={monthLabel} />
+        <WorkTab currentMonth={currentMonth} changeMonth={changeMonth} monthLabel={monthLabel} onDataChange={triggerAutoSave} />
       )}
 
       {activeTab === 'expense' && <>
@@ -519,6 +582,54 @@ function App() {
             </div>
             <div className="form-actions">
               <button type="button" className="save-btn" onClick={() => { setShowCategoryManager(false); setEditingCat(null) }}>완료</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCloudSync && (
+        <div className="modal-overlay" onClick={() => setShowCloudSync(false)}>
+          <div className="modal cloud-modal" onClick={e => e.stopPropagation()}>
+            <h3>☁️ 클라우드 동기화</h3>
+            <p className="cloud-desc">
+              나만의 ID를 정하면 데이터가 자동으로 클라우드에 저장됩니다.<br/>
+              다른 기기에서 같은 ID로 불러오기하면 데이터를 복원할 수 있어요.
+            </p>
+            <label>
+              내 동기화 ID
+              <input
+                type="text"
+                placeholder="예: myfamily2024"
+                value={cloudId}
+                onChange={e => setCloudId(e.target.value)}
+              />
+            </label>
+            {cloudMessage && (
+              <p className={`cloud-msg ${cloudStatus === 'error' ? 'error' : 'success'}`}>
+                {cloudMessage}
+              </p>
+            )}
+            <div className="cloud-actions">
+              <button
+                className="cloud-btn save"
+                onClick={handleCloudSave}
+                disabled={!cloudId.trim() || cloudStatus === 'saving'}
+              >
+                {cloudStatus === 'saving' ? '저장 중...' : '☁️ 저장하기'}
+              </button>
+              <button
+                className="cloud-btn load"
+                onClick={handleCloudLoad}
+                disabled={!cloudId.trim() || cloudStatus === 'loading'}
+              >
+                {cloudStatus === 'loading' ? '불러오는 중...' : '📥 불러오기'}
+              </button>
+            </div>
+            {cloudId && localStorage.getItem('hb-cloud-id') === cloudId.trim() && (
+              <p className="cloud-auto-hint">✅ 자동 저장이 활성화되어 있습니다</p>
+            )}
+            <div className="form-actions">
+              <button type="button" className="save-btn" onClick={() => setShowCloudSync(false)}>닫기</button>
             </div>
           </div>
         </div>

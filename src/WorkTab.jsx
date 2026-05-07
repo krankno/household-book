@@ -22,7 +22,7 @@ function getCalendarDays(year, month) {
   return days
 }
 
-export default function WorkTab({ currentMonth, changeMonth, monthLabel }) {
+export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataChange }) {
   const [hourlyWage, setHourlyWage] = useState(() => {
     return Number(localStorage.getItem('hb-hourly-wage')) || 9860
   })
@@ -62,11 +62,11 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel }) {
     memo: ''
   })
 
-  useEffect(() => { localStorage.setItem('hb-hourly-wage', String(hourlyWage)) }, [hourlyWage])
-  useEffect(() => { localStorage.setItem('hb-overtime-base', String(overtimeBase)) }, [overtimeBase])
-  useEffect(() => { localStorage.setItem('hb-overtime-rate', String(overtimeRate)) }, [overtimeRate])
-  useEffect(() => { localStorage.setItem('hb-work-logs', JSON.stringify(workLogs)) }, [workLogs])
-  useEffect(() => { localStorage.setItem('hb-deductions', JSON.stringify(deductions)) }, [deductions])
+  useEffect(() => { localStorage.setItem('hb-hourly-wage', String(hourlyWage)); onDataChange?.() }, [hourlyWage, onDataChange])
+  useEffect(() => { localStorage.setItem('hb-overtime-base', String(overtimeBase)); onDataChange?.() }, [overtimeBase, onDataChange])
+  useEffect(() => { localStorage.setItem('hb-overtime-rate', String(overtimeRate)); onDataChange?.() }, [overtimeRate, onDataChange])
+  useEffect(() => { localStorage.setItem('hb-work-logs', JSON.stringify(workLogs)); onDataChange?.() }, [workLogs, onDataChange])
+  useEffect(() => { localStorage.setItem('hb-deductions', JSON.stringify(deductions)); onDataChange?.() }, [deductions, onDataChange])
 
   const [y, m] = currentMonth.split('-').map(Number)
   const calendarDays = useMemo(() => getCalendarDays(y, m), [y, m])

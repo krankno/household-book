@@ -71,6 +71,24 @@ header h1 {
   align-items: center;
 }
 
+.header-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cloud-indicator.saved {
+  font-size: 12px;
+  animation: fadeInOut 2s ease-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .settings-btn {
   background: none;
   border: none;
@@ -1370,6 +1388,79 @@ header h1 {
   .work-form-date {
     font-size: 18px;
   }
+}
+
+/* Cloud Sync Modal */
+.cloud-modal {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.cloud-desc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.cloud-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cloud-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.cloud-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cloud-btn.save {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  color: #fff;
+}
+
+.cloud-btn.load {
+  background: linear-gradient(135deg, #00b894, #55efc4);
+  color: #fff;
+}
+
+.cloud-msg {
+  text-align: center;
+  font-size: 13px;
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.cloud-msg.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.cloud-msg.error {
+  background: #fce4ec;
+  color: #c62828;
+}
+
+.cloud-auto-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #2e7d32;
+  margin-top: 12px;
 }
 
 /* ===== safe area (노치/펀치홀 대응) ===== */
