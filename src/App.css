@@ -12,12 +12,15 @@ body {
 }
 
 .app {
-  max-width: 480px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #fff;
   position: relative;
   padding-bottom: 80px;
+  overflow-x: hidden;
 }
 
 header {
@@ -341,9 +344,10 @@ header h1 {
 .modal {
   background: #fff;
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   border-radius: 20px 20px 0 0;
   padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   animation: slideUp 0.25s ease-out;
 }
 
@@ -971,7 +975,7 @@ header h1 {
 
 .cal-cell {
   aspect-ratio: 1;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -979,7 +983,7 @@ header h1 {
   cursor: pointer;
   transition: background 0.15s;
   position: relative;
-  min-height: 48px;
+  min-height: 44px;
 }
 
 .cal-cell.empty {
@@ -1052,4 +1056,329 @@ header h1 {
 
 .delete-form-btn:hover {
   background: #fce4ec;
+}
+
+/* ===== 반응형: 갤럭시 폴드 커버 (좁은 화면 ~375px 이하) ===== */
+@media (max-width: 380px) {
+  header {
+    padding: 16px 16px 0;
+  }
+
+  header h1 {
+    font-size: 19px;
+  }
+
+  .tab-btn {
+    font-size: 13px;
+    padding: 8px;
+  }
+
+  .month-nav {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .month-label {
+    font-size: 16px;
+  }
+
+  .total-expense {
+    padding: 16px 12px;
+    margin: 0 12px;
+    margin-top: 12px;
+  }
+
+  .total-amount {
+    font-size: 22px;
+  }
+
+  .pay-cards {
+    padding: 10px 8px;
+    gap: 6px;
+  }
+
+  .pay-card {
+    padding: 10px 6px;
+  }
+
+  .pay-card-value.big {
+    font-size: 17px;
+  }
+
+  .wage-summary {
+    padding: 10px 12px;
+  }
+
+  .work-calendar {
+    padding: 0 4px 8px;
+  }
+
+  .cal-grid {
+    gap: 2px;
+  }
+
+  .cal-cell {
+    min-height: 36px;
+    border-radius: 6px;
+    aspect-ratio: auto;
+    padding: 4px 0;
+  }
+
+  .cal-day {
+    font-size: 11px;
+  }
+
+  .cal-hours {
+    font-size: 9px;
+  }
+
+  .cal-ot {
+    font-size: 7px;
+  }
+
+  .pay-breakdown {
+    padding: 12px;
+  }
+
+  .breakdown-row {
+    font-size: 12px;
+  }
+
+  .breakdown-row.net-row {
+    font-size: 14px;
+  }
+
+  .fab-group {
+    bottom: 16px;
+  }
+
+  .fab {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  .modal {
+    padding: 20px 16px;
+    max-width: 100%;
+  }
+
+  .wage-info {
+    padding: 6px 10px;
+  }
+
+  .wage-value {
+    font-size: 14px;
+  }
+
+  .entries-section {
+    padding: 12px;
+  }
+
+  .category-chart {
+    padding: 12px;
+  }
+}
+
+/* ===== 반응형: 갤럭시 폴드 펼친 화면 (넓은 화면 600px+) ===== */
+@media (min-width: 600px) {
+  .app {
+    max-width: 560px;
+    margin: 0 auto;
+    border-left: 1px solid #eee;
+    border-right: 1px solid #eee;
+  }
+
+  body {
+    background: #f0f0f3;
+  }
+
+  header {
+    padding: 24px 32px 0;
+  }
+
+  header h1 {
+    font-size: 26px;
+  }
+
+  .tab-btn {
+    font-size: 16px;
+    padding: 12px;
+  }
+
+  .month-nav {
+    padding: 20px;
+    gap: 24px;
+  }
+
+  .month-label {
+    font-size: 22px;
+  }
+
+  .total-expense {
+    padding: 24px 20px;
+    margin: 0 24px;
+    margin-top: 20px;
+    border-radius: 16px;
+  }
+
+  .total-label {
+    font-size: 15px;
+  }
+
+  .total-amount {
+    font-size: 32px;
+  }
+
+  .category-chart {
+    padding: 20px 24px;
+  }
+
+  .entries-section {
+    padding: 20px 24px;
+  }
+
+  .entry-icon {
+    font-size: 28px;
+  }
+
+  .entry-category {
+    font-size: 16px;
+  }
+
+  .entry-amount {
+    font-size: 16px;
+  }
+
+  .wage-summary {
+    padding: 16px 24px;
+  }
+
+  .wage-info {
+    padding: 12px 16px;
+    border-radius: 12px;
+  }
+
+  .wage-value {
+    font-size: 18px;
+  }
+
+  .pay-cards {
+    padding: 20px 24px;
+    gap: 16px;
+  }
+
+  .pay-card {
+    padding: 20px 16px;
+    border-radius: 16px;
+  }
+
+  .pay-card-label {
+    font-size: 14px;
+  }
+
+  .pay-card-value {
+    font-size: 16px;
+  }
+
+  .pay-card-value.big {
+    font-size: 26px;
+  }
+
+  .work-calendar {
+    padding: 0 20px 16px;
+  }
+
+  .cal-grid {
+    gap: 6px;
+  }
+
+  .cal-cell {
+    min-height: 60px;
+    border-radius: 12px;
+    aspect-ratio: auto;
+    padding: 8px 0;
+  }
+
+  .cal-dow {
+    font-size: 13px;
+    padding: 8px 0;
+  }
+
+  .cal-day {
+    font-size: 15px;
+  }
+
+  .cal-hours {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .cal-ot {
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  .pay-breakdown {
+    padding: 20px 24px;
+  }
+
+  .pay-breakdown h3 {
+    font-size: 17px;
+  }
+
+  .breakdown-row {
+    font-size: 15px;
+    padding: 8px 0;
+  }
+
+  .breakdown-row.net-row {
+    font-size: 20px;
+  }
+
+  .fab-group {
+    bottom: 28px;
+  }
+
+  .fab {
+    width: 64px;
+    height: 64px;
+    font-size: 32px;
+  }
+
+  .modal {
+    max-width: 520px;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .modal h3 {
+    font-size: 20px;
+  }
+
+  .modal input,
+  .modal select {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+
+  .save-btn,
+  .cancel-btn {
+    padding: 14px;
+    font-size: 16px;
+  }
+
+  .work-form-date {
+    font-size: 18px;
+  }
+}
+
+/* ===== safe area (노치/펀치홀 대응) ===== */
+@supports (padding: env(safe-area-inset-top)) {
+  header {
+    padding-top: calc(20px + env(safe-area-inset-top));
+  }
+
+  .fab-group {
+    bottom: calc(24px + env(safe-area-inset-bottom));
+  }
 }
