@@ -48,36 +48,73 @@ function guessCategory(text, categories) {
   return categories[categories.length - 1] || '기타'
 }
 
-// 외화 통화 감지 및 표시
-const CURRENCY_SYMBOLS = {
-  '원': { symbol: '₩', rate: 1 },
-  '₩': { symbol: '₩', rate: 1 },
-  'KRW': { symbol: '₩', rate: 1 },
-  '$': { symbol: '$', rate: 1380 },
-  'USD': { symbol: '$', rate: 1380 },
-  '¥': { symbol: '¥', rate: 9.5 },
-  'JPY': { symbol: '¥', rate: 9.5 },
-  '円': { symbol: '¥', rate: 9.5 },
-  '€': { symbol: '€', rate: 1500 },
-  'EUR': { symbol: '€', rate: 1500 },
-  '£': { symbol: '£', rate: 1750 },
-  'GBP': { symbol: '£', rate: 1750 },
-  'CNY': { symbol: '¥', rate: 190 },
-  '元': { symbol: '¥', rate: 190 },
+// 외화 통화 매핑 (심볼 → 통화코드)
+const CURRENCY_MAP = {
+  '원': 'KRW', '₩': 'KRW', 'KRW': 'KRW',
+  '$': 'USD', 'USD': 'USD',
+  '¥': 'JPY', 'JPY': 'JPY', '円': 'JPY',
+  '€': 'EUR', 'EUR': 'EUR',
+  '£': 'GBP', 'GBP': 'GBP',
+  'CNY': 'CNY', '元': 'CNY', 'RMB': 'CNY',
+}
+
+const CURRENCY_DISPLAY = {
+  'KRW': '₩', 'USD': '$', 'JPY': '¥', 'EUR': '€', 'GBP': '£', 'CNY': '¥',
+}
+
+// 실시간 환율 캐시 (1일 1회 갱신)
+let cachedRates = null
+let cacheTime = 0
+
+async function getExchangeRates() {
+  const now = Date.now()
+  // 캐시가 24시간 이내면 재사용
+  if (cachedRates && (now - cacheTime) < 24 * 60 * 60 * 1000) {
+    return cachedRates
+  }
+  // localStorage 캐시 확인
+  const saved = localStorage.getItem('hb-exchange-rates')
+  if (saved) {
+    const { rates, time } = JSON.parse(saved)
+    if ((now - time) < 24 * 60 * 60 * 1000) {
+      cachedRates = rates
+      cacheTime = time
+      return rates
+    }
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/KRW')
+    const data = await res.json()
+    if (data.result === 'success') {
+      // KRW 기준 → 각 통화 1단위당 KRW 환산
+      const krwRates = {}
+      Object.entries(data.rates).forEach(([code, rate]) => {
+        krwRates[code] = Math.round((1 / rate) * 100) / 100
+      })
+      krwRates['KRW'] = 1
+      cachedRates = krwRates
+      cacheTime = now
+      localStorage.setItem('hb-exchange-rates', JSON.stringify({ rates: krwRates, time: now }))
+      return krwRates
+    }
+  } catch (e) {
+    console.error('Exchange rate fetch failed:', e)
+  }
+  // 폴백 고정 환율
+  return { KRW: 1, USD: 1380, JPY: 9.5, EUR: 1500, GBP: 1750, CNY: 190 }
 }
 
 function detectCurrency(text) {
-  // 외화 패턴 감지
   const currencyPatterns = [
-    { regex: /\$\s*([\d,]+\.?\d*)/g, currency: '$' },
+    { regex: /\$\s*([\d,]+\.?\d*)/g, currency: 'USD' },
     { regex: /([\d,]+\.?\d*)\s*(?:USD|dollars?)/gi, currency: 'USD' },
-    { regex: /¥\s*([\d,]+)/g, currency: '¥' },
+    { regex: /¥\s*([\d,]+)/g, currency: 'JPY' },
     { regex: /([\d,]+)\s*(?:JPY|円)/gi, currency: 'JPY' },
-    { regex: /€\s*([\d,]+\.?\d*)/g, currency: '€' },
+    { regex: /€\s*([\d,]+\.?\d*)/g, currency: 'EUR' },
     { regex: /([\d,]+\.?\d*)\s*(?:EUR|euros?)/gi, currency: 'EUR' },
-    { regex: /£\s*([\d,]+\.?\d*)/g, currency: '£' },
+    { regex: /£\s*([\d,]+\.?\d*)/g, currency: 'GBP' },
     { regex: /([\d,]+\.?\d*)\s*(?:GBP|pounds?)/gi, currency: 'GBP' },
-    { regex: /([\d,]+)\s*元/g, currency: '元' },
+    { regex: /([\d,]+)\s*元/g, currency: 'CNY' },
     { regex: /([\d,]+)\s*(?:CNY|RMB)/gi, currency: 'CNY' },
   ]
 
@@ -89,7 +126,7 @@ function detectCurrency(text) {
   return null
 }
 
-function parseReceiptText(text, categories) {
+async function parseReceiptText(text, categories) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   const results = []
   const today = new Date().toISOString().split('T')[0]
@@ -104,11 +141,12 @@ function parseReceiptText(text, categories) {
     }
   }
 
-  // 외화 감지
+  // 외화 감지 + 실시간 환율
   const foreignCurrency = detectCurrency(text)
-  const currInfo = foreignCurrency ? CURRENCY_SYMBOLS[foreignCurrency] : null
-  const exchangeRate = currInfo?.rate || 1
-  const currSymbol = currInfo?.symbol || ''
+  const currCode = foreignCurrency ? (CURRENCY_MAP[foreignCurrency] || foreignCurrency) : null
+  const rates = await getExchangeRates()
+  const exchangeRate = (currCode && currCode !== 'KRW') ? (rates[currCode] || 1) : 1
+  const currSymbol = currCode ? (CURRENCY_DISPLAY[currCode] || currCode) : ''
 
   // 한국 원화 총액 패턴
   const totalPatterns = [
@@ -506,7 +544,7 @@ function App() {
           return
         }
 
-        const results = parseReceiptText(text, categories)
+        const results = await parseReceiptText(text, categories)
         if (results.length === 0) {
           setAnalyzeError('금액 정보를 찾을 수 없습니다. 직접 입력해주세요.')
         } else {
