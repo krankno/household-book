@@ -19,6 +19,8 @@ function getCalendarDays(year, month) {
   const days = []
   for (let i = 0; i < firstDay; i++) days.push(null)
   for (let d = 1; d <= daysInMonth; d++) days.push(d)
+  // 마지막 줄을 7의 배수로 채움
+  while (days.length % 7 !== 0) days.push(null)
   return days
 }
 
@@ -207,12 +209,10 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
       </div>
 
       <div className="work-calendar">
-        <div className="cal-header">
+        <div className="cal-grid">
           {['일', '월', '화', '수', '목', '금', '토'].map(d => (
             <div key={d} className={`cal-dow ${d === '일' ? 'sun' : d === '토' ? 'sat' : ''}`}>{d}</div>
           ))}
-        </div>
-        <div className="cal-grid">
           {calendarDays.map((day, i) => {
             if (!day) return <div key={`e${i}`} className="cal-cell empty" />
             const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`
