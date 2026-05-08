@@ -491,10 +491,10 @@ function App() {
         })}
       </div>
 
-      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleImageUpload} />
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
 
       <div className="fab-group">
-        <button className="fab scan-fab" onClick={() => fileInputRef.current?.click()}>📷</button>
+        <button className="fab scan-fab" onClick={() => fileInputRef.current?.click()}>🖼️</button>
         <button className="fab" onClick={() => openForm()}>+</button>
       </div>
 
