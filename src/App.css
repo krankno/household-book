@@ -1032,7 +1032,6 @@ header h1 {
 .cal-dow.sat { color: #3498db; }
 
 .cal-cell {
-  aspect-ratio: 1;
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -1040,6 +1039,7 @@ header h1 {
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s;
+  padding: 6px 0;
   position: relative;
   min-height: 44px;
 }
@@ -1178,7 +1178,6 @@ header h1 {
   .cal-cell {
     min-height: 36px;
     border-radius: 6px;
-    aspect-ratio: auto;
     padding: 4px 0;
   }
 
@@ -1354,7 +1353,6 @@ header h1 {
   .cal-cell {
     min-height: 60px;
     border-radius: 12px;
-    aspect-ratio: auto;
     padding: 8px 0;
   }
 
