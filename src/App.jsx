@@ -191,9 +191,22 @@ async function parseReceiptText(text, categories) {
 
       let storeName = ''
       // 금액 뒤쪽 텍스트에서 가맹점 찾기
-      const afterAmount = fullText.substring(idx + cardMatch[0].length, idx + cardMatch[0].length + 150)
-      const shopMatch = afterAmount.match(/(?:주식회사|㈜|\(주\))?\s*([가-힣]{2,}[가-힣a-zA-Z0-9]*)/)
-      if (shopMatch) storeName = shopMatch[1].replace(/^(?:주식회사|㈜)/, '').trim()
+      const afterAmount = fullText.substring(idx + cardMatch[0].length, idx + cardMatch[0].length + 200)
+      // "주식회사XXX" 또는 "㈜XXX" 패턴 우선
+      const corpMatch = afterAmount.match(/(?:주식회사|㈜|\(주\))\s*([가-힣a-zA-Z0-9]{2,})/)
+      if (corpMatch) {
+        storeName = corpMatch[1].trim()
+      } else {
+        // 일시불, 할부, 누적, 날짜, 시간 등 제외하고 한글 가맹점명 찾기
+        const skipWords = /^(일시불|할부|\d+개월|누적|승인|취소|김광민|님|네이버|현대카드|현대카드\s*M|카드|비씨|삼성|신한|국민|롯데|하나|우리|농협|기업|씨티)/
+        const words = afterAmount.match(/[가-힣a-zA-Z][가-힣a-zA-Z0-9.]{1,}/g) || []
+        for (const w of words) {
+          if (!skipWords.test(w) && !/^\d/.test(w)) {
+            storeName = w
+            break
+          }
+        }
+      }
 
       cardResults.push({
         category: guessCategory((storeName || '') + ' ' + nearby, categories),
@@ -735,7 +748,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v1.6</span></h1>
+          <h1>가계부 <span className="app-version">v1.7</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
