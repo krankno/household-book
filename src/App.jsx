@@ -598,7 +598,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부</h1>
+          <h1>가계부 <span className="app-version">v1.3</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
