@@ -204,45 +204,61 @@ async function parseReceiptText(text, categories) {
     }
   }
 
-  // 패턴: "해외승인 USD 22.00" / "USD22.00" (OCR이 공백 없이 붙이는 경우 포함)
-  const cardFxPattern = /해외\s*승인\s*(?:USD|US\$|\$)\s*([\d,.]+)/gi
-  let fxMatch
-  while ((fxMatch = cardFxPattern.exec(fullText)) !== null) {
-    const rawAmt = parseFloat(fxMatch[1].replace(/,/g, ''))
-    if (rawAmt > 0 && rawAmt < 100000) {
-      const usdRate = rates['USD'] || 1380
-      const krwAmt = Math.round(rawAmt * usdRate)
-      const afterFx = fullText.substring(fxMatch.index + fxMatch[0].length, fxMatch.index + fxMatch[0].length + 100)
-      const shopMatch = afterFx.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
-      const storeName = shopMatch ? shopMatch[1].trim() : ''
-      cardResults.push({
-        category: guessCategory(storeName || 'USD', categories),
-        amount: krwAmt,
-        memo: `[$${rawAmt}] ${storeName || '해외결제'}`,
-        date: receiptDate,
-      })
-    }
+  // 패턴: "해외승인 USD 22.00", "해외승인 JPY 1,500" 등 (다중 외화 지원)
+  const FX_CURRENCIES = {
+    'USD': { symbols: ['USD', 'US\\$', '\\$'], display: '$', defaultRate: 1380 },
+    'JPY': { symbols: ['JPY', 'JP¥', '¥', '円'], display: '¥', defaultRate: 9.5 },
+    'EUR': { symbols: ['EUR', '€'], display: '€', defaultRate: 1500 },
+    'GBP': { symbols: ['GBP', '£'], display: '£', defaultRate: 1750 },
+    'CNY': { symbols: ['CNY', 'RMB', '元'], display: '¥', defaultRate: 190 },
   }
 
-  // USD 패턴 (해외승인 없이): "USD 22.00", "USD22.005/6" (OCR 오류 대응)
-  if (cardResults.filter(r => r.memo.startsWith('[$')).length === 0) {
-    const usdPattern = /USD\s*([\d]+\.[\d]{2})/gi
-    let usdMatch
-    while ((usdMatch = usdPattern.exec(fullText)) !== null) {
-      const rawAmt = parseFloat(usdMatch[1])
-      if (rawAmt > 0 && rawAmt < 100000) {
-        const usdRate = rates['USD'] || 1380
-        const krwAmt = Math.round(rawAmt * usdRate)
-        const afterUsd = fullText.substring(usdMatch.index + usdMatch[0].length, usdMatch.index + usdMatch[0].length + 100)
-        const shopMatch = afterUsd.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
+  for (const [code, fx] of Object.entries(FX_CURRENCIES)) {
+    const symbolGroup = fx.symbols.join('|')
+    // 해외승인 + 통화코드 + 금액
+    const fxPattern = new RegExp(`해외\\s*승인\\s*(?:${symbolGroup})\\s*([\\d,.]+)`, 'gi')
+    let fxMatch
+    while ((fxMatch = fxPattern.exec(fullText)) !== null) {
+      const rawAmt = parseFloat(fxMatch[1].replace(/,/g, ''))
+      if (rawAmt > 0 && rawAmt < 10000000) {
+        const rate = rates[code] || fx.defaultRate
+        const krwAmt = Math.round(rawAmt * rate)
+        const afterFx = fullText.substring(fxMatch.index + fxMatch[0].length, fxMatch.index + fxMatch[0].length + 100)
+        const shopMatch = afterFx.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
         const storeName = shopMatch ? shopMatch[1].trim() : ''
         cardResults.push({
-          category: guessCategory(storeName || 'USD', categories),
+          category: guessCategory(storeName || code, categories),
           amount: krwAmt,
-          memo: `[$${rawAmt}] ${storeName || '해외결제'}`,
+          memo: `[${fx.display}${rawAmt.toLocaleString()}] ${storeName || '해외결제'}`,
           date: receiptDate,
         })
       }
+    }
+  }
+
+  // 통화코드 + 금액 (해외승인 없이): "USD 22.00", "JPY 1500", "USD22.005/6" (OCR 오류 대응)
+  if (cardResults.filter(r => r.memo.startsWith('[')).length === 0) {
+    for (const [code, fx] of Object.entries(FX_CURRENCIES)) {
+      // 통화코드 + 금액 (소수점 있을 수도, 없을 수도)
+      const pattern = new RegExp(`${code}\\s*([\\d,]+\\.?\\d*)`, 'gi')
+      let m
+      while ((m = pattern.exec(fullText)) !== null) {
+        const rawAmt = parseFloat(m[1].replace(/,/g, ''))
+        if (rawAmt > 0 && rawAmt < 10000000) {
+          const rate = rates[code] || fx.defaultRate
+          const krwAmt = Math.round(rawAmt * rate)
+          const afterM = fullText.substring(m.index + m[0].length, m.index + m[0].length + 100)
+          const shopMatch = afterM.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
+          const storeName = shopMatch ? shopMatch[1].trim() : ''
+          cardResults.push({
+            category: guessCategory(storeName || code, categories),
+            amount: krwAmt,
+            memo: `[${fx.display}${rawAmt.toLocaleString()}] ${storeName || '해외결제'}`,
+            date: receiptDate,
+          })
+        }
+      }
+      if (cardResults.filter(r => r.memo.startsWith('[')).length > 0) break
     }
   }
 
@@ -719,7 +735,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v1.5</span></h1>
+          <h1>가계부 <span className="app-version">v1.6</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
