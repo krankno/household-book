@@ -48,6 +48,47 @@ function guessCategory(text, categories) {
   return categories[categories.length - 1] || '기타'
 }
 
+// 외화 통화 감지 및 표시
+const CURRENCY_SYMBOLS = {
+  '원': { symbol: '₩', rate: 1 },
+  '₩': { symbol: '₩', rate: 1 },
+  'KRW': { symbol: '₩', rate: 1 },
+  '$': { symbol: '$', rate: 1380 },
+  'USD': { symbol: '$', rate: 1380 },
+  '¥': { symbol: '¥', rate: 9.5 },
+  'JPY': { symbol: '¥', rate: 9.5 },
+  '円': { symbol: '¥', rate: 9.5 },
+  '€': { symbol: '€', rate: 1500 },
+  'EUR': { symbol: '€', rate: 1500 },
+  '£': { symbol: '£', rate: 1750 },
+  'GBP': { symbol: '£', rate: 1750 },
+  'CNY': { symbol: '¥', rate: 190 },
+  '元': { symbol: '¥', rate: 190 },
+}
+
+function detectCurrency(text) {
+  // 외화 패턴 감지
+  const currencyPatterns = [
+    { regex: /\$\s*([\d,]+\.?\d*)/g, currency: '$' },
+    { regex: /([\d,]+\.?\d*)\s*(?:USD|dollars?)/gi, currency: 'USD' },
+    { regex: /¥\s*([\d,]+)/g, currency: '¥' },
+    { regex: /([\d,]+)\s*(?:JPY|円)/gi, currency: 'JPY' },
+    { regex: /€\s*([\d,]+\.?\d*)/g, currency: '€' },
+    { regex: /([\d,]+\.?\d*)\s*(?:EUR|euros?)/gi, currency: 'EUR' },
+    { regex: /£\s*([\d,]+\.?\d*)/g, currency: '£' },
+    { regex: /([\d,]+\.?\d*)\s*(?:GBP|pounds?)/gi, currency: 'GBP' },
+    { regex: /([\d,]+)\s*元/g, currency: '元' },
+    { regex: /([\d,]+)\s*(?:CNY|RMB)/gi, currency: 'CNY' },
+  ]
+
+  for (const { regex, currency } of currencyPatterns) {
+    if (regex.test(text)) {
+      return currency
+    }
+  }
+  return null
+}
+
 function parseReceiptText(text, categories) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   const results = []
@@ -63,53 +104,138 @@ function parseReceiptText(text, categories) {
     }
   }
 
+  // 외화 감지
+  const foreignCurrency = detectCurrency(text)
+  const currInfo = foreignCurrency ? CURRENCY_SYMBOLS[foreignCurrency] : null
+  const exchangeRate = currInfo?.rate || 1
+  const currSymbol = currInfo?.symbol || ''
+
+  // 한국 원화 총액 패턴
   const totalPatterns = [
-    /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*[\D]*([\d,]+)\s*원?/i,
-    /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*([\d,]+)/i,
+    /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*[\D]*([\d,]+\.?\d*)\s*원?/i,
+    /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*([\d,]+\.?\d*)/i,
+  ]
+
+  // 외화 총액 패턴
+  const foreignTotalPatterns = [
+    /(?:total|amount|sum|grand\s*total|subtotal|net|charge)\s*[:\s]*[^\d]*([\d,]+\.?\d*)/i,
+    /(?:合計|合计|小計|小计)\s*[:\s]*([\d,]+)/i,
   ]
 
   let totalAmount = 0
+  let isForeign = false
+
+  // 먼저 원화로 시도
   for (const line of lines) {
     for (const pattern of totalPatterns) {
       const match = line.match(pattern)
       if (match) {
-        const amt = parseInt(match[1].replace(/,/g, ''), 10)
+        const amt = parseFloat(match[1].replace(/,/g, ''))
         if (amt > totalAmount && amt < 100000000) totalAmount = amt
       }
     }
   }
 
+  // 원화 금액이 없으면 외화로 시도
+  if (totalAmount === 0 && foreignCurrency) {
+    isForeign = true
+    for (const line of lines) {
+      for (const pattern of foreignTotalPatterns) {
+        const match = line.match(pattern)
+        if (match) {
+          const amt = parseFloat(match[1].replace(/,/g, ''))
+          if (amt > totalAmount && amt < 1000000) totalAmount = amt
+        }
+      }
+    }
+    // 통화 기호 앞뒤 금액도 시도
+    if (totalAmount === 0) {
+      const symbolPatterns = [
+        /[\$€£¥]\s*([\d,]+\.?\d*)/g,
+        /([\d,]+\.?\d*)\s*(?:USD|JPY|EUR|GBP|CNY|円|元|dollars?|pounds?|euros?)/gi,
+      ]
+      const amounts = []
+      for (const pattern of symbolPatterns) {
+        let m
+        while ((m = pattern.exec(text)) !== null) {
+          const amt = parseFloat(m[1].replace(/,/g, ''))
+          if (amt > 0 && amt < 1000000) amounts.push(amt)
+        }
+      }
+      if (amounts.length > 0) totalAmount = Math.max(...amounts)
+    }
+  }
+
   if (totalAmount > 0) {
     const category = guessCategory(text, categories)
-    const storeName = lines[0]?.replace(/[^\w가-힣\s]/g, '').trim().slice(0, 20) || ''
-    results.push({ category, amount: totalAmount, memo: storeName || '영수증 스캔', date: receiptDate })
+    const storeName = lines[0]?.replace(/[^\w가-힣a-zA-Z\s]/g, '').trim().slice(0, 20) || ''
+    const krwAmount = isForeign ? Math.round(totalAmount * exchangeRate) : Math.round(totalAmount)
+    const memoPrefix = isForeign ? `[${currSymbol}${totalAmount.toLocaleString()}] ` : ''
+    results.push({
+      category,
+      amount: krwAmount,
+      memo: memoPrefix + (storeName || '영수증 스캔'),
+      date: receiptDate
+    })
     return results
   }
 
-  const itemPattern = /(.+?)\s+([\d,]+)\s*원?/
+  // 항목별 파싱
+  const itemPattern = /(.+?)\s+([\d,]+\.?\d*)\s*(?:원|$|USD|\$|¥|€|£|円|元)?/
   const seen = new Set()
   for (const line of lines) {
     const match = line.match(itemPattern)
     if (match) {
-      const name = match[1].replace(/[^\w가-힣\s]/g, '').trim()
-      const amount = parseInt(match[2].replace(/,/g, ''), 10)
-      if (amount >= 100 && amount < 100000000 && name.length > 0 && !seen.has(name)) {
+      const name = match[1].replace(/[^\w가-힣a-zA-Z\s]/g, '').trim()
+      const rawAmount = parseFloat(match[2].replace(/,/g, ''))
+      if (!name.length || seen.has(name)) continue
+
+      let amount = rawAmount
+      let memoPrefix = ''
+      if (isForeign && rawAmount < 10000) {
+        amount = Math.round(rawAmount * exchangeRate)
+        memoPrefix = `[${currSymbol}${rawAmount.toLocaleString()}] `
+      }
+
+      if (amount >= 100 && amount < 100000000) {
         seen.add(name)
-        results.push({ category: guessCategory(name + ' ' + text, categories), amount, memo: name.slice(0, 30), date: receiptDate })
+        results.push({
+          category: guessCategory(name + ' ' + text, categories),
+          amount: Math.round(amount),
+          memo: memoPrefix + name.slice(0, 30),
+          date: receiptDate
+        })
       }
     }
   }
 
   if (results.length === 0) {
     const amounts = []
-    const amountRegex = /([\d,]{3,})\s*원/g
+    // 원화
+    const krwRegex = /([\d,]{3,})\s*원/g
     let m
-    while ((m = amountRegex.exec(text)) !== null) {
+    while ((m = krwRegex.exec(text)) !== null) {
       const amt = parseInt(m[1].replace(/,/g, ''), 10)
-      if (amt >= 100 && amt < 100000000) amounts.push(amt)
+      if (amt >= 100 && amt < 100000000) amounts.push({ amt, foreign: false })
+    }
+    // 외화
+    if (amounts.length === 0) {
+      const fxPatterns = [
+        /[\$€£¥]\s*([\d,]+\.?\d*)/g,
+        /([\d,]+\.?\d*)\s*(?:USD|JPY|EUR|GBP|CNY|円|元)/gi,
+      ]
+      for (const pattern of fxPatterns) {
+        while ((m = pattern.exec(text)) !== null) {
+          const amt = parseFloat(m[1].replace(/,/g, ''))
+          if (amt > 0 && amt < 1000000) amounts.push({ amt, foreign: true })
+        }
+      }
     }
     if (amounts.length > 0) {
-      results.push({ category: guessCategory(text, categories), amount: Math.max(...amounts), memo: '이미지 스캔', date: receiptDate })
+      const best = amounts.reduce((a, b) => a.amt > b.amt ? a : b)
+      const krwAmt = best.foreign ? Math.round(best.amt * exchangeRate) : best.amt
+      const memo = best.foreign ? `[${currSymbol}${best.amt.toLocaleString()}] 이미지 스캔` : '이미지 스캔'
+      results.push({ category: guessCategory(text, categories), amount: krwAmt, memo, date: receiptDate })
     }
   }
 
