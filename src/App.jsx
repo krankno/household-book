@@ -128,11 +128,15 @@ function detectCurrency(text) {
 
 async function parseReceiptText(text, categories) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const fullText = lines.join(' ')
   const results = []
   const today = new Date().toISOString().split('T')[0]
+  const currentYear = new Date().getFullYear()
 
+  // 날짜 감지
   let receiptDate = today
   for (const line of lines) {
+    // 2024-05-06, 2024.05.06, 2024/05/06
     const dateMatch = line.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
     if (dateMatch) {
       const [, yr, mo, da] = dateMatch
@@ -140,21 +144,123 @@ async function parseReceiptText(text, categories) {
       break
     }
   }
+  // 카드 알림의 M/D 형식: "5/6", "5월 6일" 등
+  if (receiptDate === today) {
+    for (const line of lines) {
+      const mdMatch = line.match(/(?:,\s*|\s)(\d{1,2})[/.](\d{1,2})(?:\s|$)/)
+      if (mdMatch) {
+        const mo = mdMatch[1].padStart(2, '0')
+        const da = mdMatch[2].padStart(2, '0')
+        receiptDate = `${currentYear}-${mo}-${da}`
+        break
+      }
+      const korDateMatch = line.match(/(\d{1,2})월\s*(\d{1,2})일/)
+      if (korDateMatch) {
+        const mo = korDateMatch[1].padStart(2, '0')
+        const da = korDateMatch[2].padStart(2, '0')
+        receiptDate = `${currentYear}-${mo}-${da}`
+        break
+      }
+    }
+  }
 
-  // 외화 감지 + 실시간 환율
+  // 실시간 환율 가져오기
+  const rates = await getExchangeRates()
+
+  // ==========================================
+  // 1단계: 카드 알림 패턴 (한국 카드사 SMS/알림)
+  // ==========================================
+  // 패턴: "승인 27,500원", "승인 11,000원 일시불"
+  const cardKrwPattern = /승인\s*([\d,]+)\s*원/g
+  let cardMatch
+  const cardResults = []
+  while ((cardMatch = cardKrwPattern.exec(fullText)) !== null) {
+    const amt = parseInt(cardMatch[1].replace(/,/g, ''), 10)
+    if (amt >= 100 && amt < 100000000) {
+      // 해당 금액 주변에서 가맹점명 찾기
+      const idx = cardMatch.index
+      const nearby = fullText.substring(Math.max(0, idx - 100), idx + cardMatch[0].length + 100)
+      // 가맹점: "주식회사XXX", 또는 금액 뒤 줄
+      const storeMatch = nearby.match(/(?:주식회사|㈜|\(주\))?\s*([가-힣a-zA-Z0-9.]+(?:[가-힣a-zA-Z0-9. ]*[가-힣a-zA-Z0-9.])?)/)
+      // 날짜 찾기: nearby에서 M/D 패턴
+      const nearDateMatch = nearby.match(/(?:,\s*|\s)(\d{1,2})[/.](\d{1,2})/)
+      let itemDate = receiptDate
+      if (nearDateMatch) {
+        itemDate = `${currentYear}-${nearDateMatch[1].padStart(2, '0')}-${nearDateMatch[2].padStart(2, '0')}`
+      }
+
+      let storeName = ''
+      // 금액 뒤쪽 텍스트에서 가맹점 찾기
+      const afterAmount = fullText.substring(idx + cardMatch[0].length, idx + cardMatch[0].length + 150)
+      const shopMatch = afterAmount.match(/(?:주식회사|㈜|\(주\))?\s*([가-힣]{2,}[가-힣a-zA-Z0-9]*)/)
+      if (shopMatch) storeName = shopMatch[1].replace(/^(?:주식회사|㈜)/, '').trim()
+
+      cardResults.push({
+        category: guessCategory((storeName || '') + ' ' + nearby, categories),
+        amount: amt,
+        memo: storeName || '카드 승인',
+        date: itemDate,
+      })
+    }
+  }
+
+  // 패턴: "해외승인 USD 22.00" / "USD22.00" (OCR이 공백 없이 붙이는 경우 포함)
+  const cardFxPattern = /해외\s*승인\s*(?:USD|US\$|\$)\s*([\d,.]+)/gi
+  let fxMatch
+  while ((fxMatch = cardFxPattern.exec(fullText)) !== null) {
+    const rawAmt = parseFloat(fxMatch[1].replace(/,/g, ''))
+    if (rawAmt > 0 && rawAmt < 100000) {
+      const usdRate = rates['USD'] || 1380
+      const krwAmt = Math.round(rawAmt * usdRate)
+      const afterFx = fullText.substring(fxMatch.index + fxMatch[0].length, fxMatch.index + fxMatch[0].length + 100)
+      const shopMatch = afterFx.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
+      const storeName = shopMatch ? shopMatch[1].trim() : ''
+      cardResults.push({
+        category: guessCategory(storeName || 'USD', categories),
+        amount: krwAmt,
+        memo: `[$${rawAmt}] ${storeName || '해외결제'}`,
+        date: receiptDate,
+      })
+    }
+  }
+
+  // USD 패턴 (해외승인 없이): "USD 22.00", "USD22.005/6" (OCR 오류 대응)
+  if (cardResults.filter(r => r.memo.startsWith('[$')).length === 0) {
+    const usdPattern = /USD\s*([\d]+\.[\d]{2})/gi
+    let usdMatch
+    while ((usdMatch = usdPattern.exec(fullText)) !== null) {
+      const rawAmt = parseFloat(usdMatch[1])
+      if (rawAmt > 0 && rawAmt < 100000) {
+        const usdRate = rates['USD'] || 1380
+        const krwAmt = Math.round(rawAmt * usdRate)
+        const afterUsd = fullText.substring(usdMatch.index + usdMatch[0].length, usdMatch.index + usdMatch[0].length + 100)
+        const shopMatch = afterUsd.match(/([A-Za-z][A-Za-z0-9 .]{2,})/)
+        const storeName = shopMatch ? shopMatch[1].trim() : ''
+        cardResults.push({
+          category: guessCategory(storeName || 'USD', categories),
+          amount: krwAmt,
+          memo: `[$${rawAmt}] ${storeName || '해외결제'}`,
+          date: receiptDate,
+        })
+      }
+    }
+  }
+
+  if (cardResults.length > 0) return cardResults
+
+  // ==========================================
+  // 2단계: 영수증 형태 파싱 (기존 로직)
+  // ==========================================
   const foreignCurrency = detectCurrency(text)
   const currCode = foreignCurrency ? (CURRENCY_MAP[foreignCurrency] || foreignCurrency) : null
-  const rates = await getExchangeRates()
   const exchangeRate = (currCode && currCode !== 'KRW') ? (rates[currCode] || 1) : 1
   const currSymbol = currCode ? (CURRENCY_DISPLAY[currCode] || currCode) : ''
 
-  // 한국 원화 총액 패턴
   const totalPatterns = [
     /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*[\D]*([\d,]+\.?\d*)\s*원?/i,
     /(?:합\s*계|총\s*액|총\s*합|결제\s*금액|승인\s*금액|총\s*결제|카드\s*결제|실결제|받을\s*금액|total)\s*[:\s]*([\d,]+\.?\d*)/i,
   ]
 
-  // 외화 총액 패턴
   const foreignTotalPatterns = [
     /(?:total|amount|sum|grand\s*total|subtotal|net|charge)\s*[:\s]*[^\d]*([\d,]+\.?\d*)/i,
     /(?:合計|合计|小計|小计)\s*[:\s]*([\d,]+)/i,
@@ -163,7 +269,6 @@ async function parseReceiptText(text, categories) {
   let totalAmount = 0
   let isForeign = false
 
-  // 먼저 원화로 시도
   for (const line of lines) {
     for (const pattern of totalPatterns) {
       const match = line.match(pattern)
@@ -174,7 +279,6 @@ async function parseReceiptText(text, categories) {
     }
   }
 
-  // 원화 금액이 없으면 외화로 시도
   if (totalAmount === 0 && foreignCurrency) {
     isForeign = true
     for (const line of lines) {
@@ -186,7 +290,6 @@ async function parseReceiptText(text, categories) {
         }
       }
     }
-    // 통화 기호 앞뒤 금액도 시도
     if (totalAmount === 0) {
       const symbolPatterns = [
         /[\$€£¥]\s*([\d,]+\.?\d*)/g,
@@ -218,30 +321,47 @@ async function parseReceiptText(text, categories) {
     return results
   }
 
-  // 항목별 파싱
-  const itemPattern = /(.+?)\s+([\d,]+\.?\d*)\s*(?:원|$|USD|\$|¥|€|£|円|元)?/
-  const seen = new Set()
-  for (const line of lines) {
-    const match = line.match(itemPattern)
-    if (match) {
-      const name = match[1].replace(/[^\w가-힣a-zA-Z\s]/g, '').trim()
-      const rawAmount = parseFloat(match[2].replace(/,/g, ''))
-      if (!name.length || seen.has(name)) continue
+  // 항목별: "XX,XXX원" 금액 찾기
+  const krwAmounts = []
+  const krwRegex = /([\d,]+)\s*원/g
+  let m
+  while ((m = krwRegex.exec(fullText)) !== null) {
+    const amt = parseInt(m[1].replace(/,/g, ''), 10)
+    if (amt >= 100 && amt < 100000000) {
+      // "누적" 금액 제외
+      const before = fullText.substring(Math.max(0, m.index - 5), m.index)
+      if (/누적|누적/.test(before)) continue
+      krwAmounts.push(amt)
+    }
+  }
 
-      let amount = rawAmount
-      let memoPrefix = ''
-      if (isForeign && rawAmount < 10000) {
-        amount = Math.round(rawAmount * exchangeRate)
-        memoPrefix = `[${currSymbol}${rawAmount.toLocaleString()}] `
-      }
+  if (krwAmounts.length > 0) {
+    // 가장 큰 금액이 아닌, 모든 금액을 개별 항목으로
+    for (const amt of krwAmounts) {
+      results.push({
+        category: guessCategory(text, categories),
+        amount: amt,
+        memo: '이미지 스캔',
+        date: receiptDate,
+      })
+    }
+    return results
+  }
 
-      if (amount >= 100 && amount < 100000000) {
-        seen.add(name)
+  // 외화 금액
+  const fxPatterns = [
+    /[\$€£¥]\s*([\d,]+\.?\d*)/g,
+    /([\d,]+\.?\d*)\s*(?:USD|JPY|EUR|GBP|CNY|円|元)/gi,
+  ]
+  for (const pattern of fxPatterns) {
+    while ((m = pattern.exec(text)) !== null) {
+      const amt = parseFloat(m[1].replace(/,/g, ''))
+      if (amt > 0 && amt < 1000000) {
         results.push({
-          category: guessCategory(name + ' ' + text, categories),
-          amount: Math.round(amount),
-          memo: memoPrefix + name.slice(0, 30),
-          date: receiptDate
+          category: guessCategory(text, categories),
+          amount: Math.round(amt * exchangeRate),
+          memo: `[${currSymbol}${amt}] 이미지 스캔`,
+          date: receiptDate,
         })
       }
     }
@@ -598,7 +718,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v1.3</span></h1>
+          <h1>가계부 <span className="app-version">v1.4</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
