@@ -426,6 +426,7 @@ function App() {
   const [newCatName, setNewCatName] = useState('')
   const [newCatIcon, setNewCatIcon] = useState('📤')
   const [editingCat, setEditingCat] = useState(null)
+  const [iconPickerFor, setIconPickerFor] = useState(null) // 'edit' | 'add' | null
   const [activeTab, setActiveTab] = useState('expense')
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeProgress, setAnalyzeProgress] = useState(0)
@@ -718,7 +719,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v1.4</span></h1>
+          <h1>가계부 <span className="app-version">v1.5</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
@@ -844,7 +845,7 @@ function App() {
       )}
 
       {showCategoryManager && (
-        <div className="modal-overlay" onClick={() => { setShowCategoryManager(false); setEditingCat(null) }}>
+        <div className="modal-overlay" onClick={() => { setShowCategoryManager(false); setEditingCat(null); setIconPickerFor(null) }}>
           <div className="modal category-modal" onClick={e => e.stopPropagation()}>
             <h3>카테고리 관리</h3>
             <div className="cat-list">
@@ -853,15 +854,18 @@ function App() {
                   {editingCat?.original === cat ? (
                     <div className="cat-edit-form">
                       <div className="cat-edit-row">
-                        <select className="icon-select" value={editingCat.icon} onChange={e => setEditingCat(prev => ({ ...prev, icon: e.target.value }))}>
-                          {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
-                        </select>
-                        <input className="cat-edit-input" value={editingCat.name} onChange={e => setEditingCat(prev => ({ ...prev, name: e.target.value }))} />
+                        <button type="button" className="icon-picker-btn" onClick={() => setIconPickerFor(iconPickerFor === 'edit' ? null : 'edit')}>{editingCat.icon}</button>
+                        <input className="cat-edit-input" value={editingCat.name} onChange={e => setEditingCat(prev => ({ ...prev, name: e.target.value }))} autoFocus />
+                        <button type="button" className="cat-btn save" onClick={() => { saveEditCategory(); setIconPickerFor(null) }}>저장</button>
+                        <button type="button" className="cat-btn" onClick={() => { setEditingCat(null); setIconPickerFor(null) }}>취소</button>
                       </div>
-                      <div className="cat-edit-actions">
-                        <button type="button" className="cat-btn save" onClick={saveEditCategory}>저장</button>
-                        <button type="button" className="cat-btn" onClick={() => setEditingCat(null)}>취소</button>
-                      </div>
+                      {iconPickerFor === 'edit' && (
+                        <div className="icon-grid">
+                          {ICON_OPTIONS.map(ic => (
+                            <button key={ic} type="button" className={`icon-grid-item${editingCat.icon === ic ? ' selected' : ''}`} onClick={() => { setEditingCat(prev => ({ ...prev, icon: ic })); setIconPickerFor(null) }}>{ic}</button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -880,11 +884,18 @@ function App() {
               ))}
             </div>
             <div className="cat-add">
-              <select className="icon-select" value={newCatIcon} onChange={e => setNewCatIcon(e.target.value)}>
-                {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
-              </select>
-              <input className="cat-add-input" placeholder="새 카테고리 이름" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} />
-              <button className="cat-btn add" onClick={addCategory}>추가</button>
+              <div className="cat-add-row">
+                <button type="button" className="icon-picker-btn" onClick={() => setIconPickerFor(iconPickerFor === 'add' ? null : 'add')}>{newCatIcon}</button>
+                <input className="cat-add-input" placeholder="새 카테고리 이름" value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} />
+                <button className="cat-btn add" onClick={() => { addCategory(); setIconPickerFor(null) }}>추가</button>
+              </div>
+              {iconPickerFor === 'add' && (
+                <div className="icon-grid">
+                  {ICON_OPTIONS.map(ic => (
+                    <button key={ic} type="button" className={`icon-grid-item${newCatIcon === ic ? ' selected' : ''}`} onClick={() => { setNewCatIcon(ic); setIconPickerFor(null) }}>{ic}</button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-actions">
               <button type="button" className="save-btn" onClick={() => { setShowCategoryManager(false); setEditingCat(null) }}>완료</button>

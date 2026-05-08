@@ -546,6 +546,7 @@ header h1 {
 
 .cat-edit-input {
   flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid #6c5ce7;
   border-radius: 6px;
@@ -553,39 +554,77 @@ header h1 {
   outline: none;
 }
 
-.cat-edit-actions {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-  justify-content: flex-end;
-}
-
-.icon-select {
-  width: 44px;
-  padding: 6px 4px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 18px;
-  text-align: center;
+.icon-picker-btn {
+  width: 38px;
+  height: 38px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 20px;
   cursor: pointer;
-  outline: none;
   background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
 }
 
-.icon-select:focus {
+.icon-picker-btn:active {
   border-color: #6c5ce7;
+  background: #f0edff;
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 8px 4px;
+  margin-top: 6px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.icon-grid-item {
+  width: 36px;
+  height: 36px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 18px;
+  cursor: pointer;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: all 0.15s;
+}
+
+.icon-grid-item:active {
+  background: #f0edff;
+  transform: scale(1.1);
+}
+
+.icon-grid-item.selected {
+  border-color: #6c5ce7;
+  background: #f0edff;
 }
 
 .cat-add {
-  display: flex;
-  gap: 6px;
-  align-items: center;
   padding: 8px 4px;
   border-top: 2px solid #eee;
 }
 
+.cat-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .cat-add-input {
   flex: 1;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid #ddd;
   border-radius: 6px;
