@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import Tesseract from 'tesseract.js'
 import WorkTab from './WorkTab'
 import { cloudSave, cloudRestore } from './supabase'
 import './App.css'
+
+const VISION_API_KEY = 'AIzaSyD9wyKx-SB9mADrhRGFHhVmRIsCPdfT6MM'
 
 const DEFAULT_CATEGORIES = ['식비', '교통', '주거', '통신', '의료', '교육', '문화', '의류', '생활용품', '경조사', '저축/투자', '기타']
 
@@ -342,16 +343,37 @@ function App() {
       setAnalyzing(true)
 
       try {
-        const { data } = await Tesseract.recognize(dataUrl, 'kor+eng', {
-          logger: (info) => {
-            if (info.status === 'recognizing text') {
-              setAnalyzeProgress(Math.round(info.progress * 100))
-            }
-          }
-        })
+        // base64 데이터 추출
+        const base64 = dataUrl.split(',')[1]
+        setAnalyzeProgress(30)
 
-        const text = data.text
+        // Google Cloud Vision API 호출
+        const response = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${VISION_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requests: [{
+                image: { content: base64 },
+                features: [{ type: 'TEXT_DETECTION' }],
+                imageContext: { languageHints: ['ko', 'en'] }
+              }]
+            })
+          }
+        )
+
+        setAnalyzeProgress(70)
+        const result = await response.json()
+
+        if (result.error) {
+          throw new Error(result.error.message)
+        }
+
+        const textAnnotations = result.responses?.[0]?.textAnnotations
+        const text = textAnnotations?.[0]?.description || ''
         setOcrText(text)
+        setAnalyzeProgress(90)
 
         if (!text.trim()) {
           setAnalyzeError('이미지에서 텍스트를 찾을 수 없습니다.')
