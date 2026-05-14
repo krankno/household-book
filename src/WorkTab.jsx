@@ -13,10 +13,10 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('ko-KR').format(Math.round(amount))
 }
 
-// 주휴수당 계산: 주 15시간 이상 근무 시, (주간 근무시간 ÷ 5) × 시급
-function calcWeeklyHolidayPay(weekHours, wage) {
-  if (weekHours < 15) return 0
-  return Math.round((weekHours / 5) * wage)
+// 주휴수당 계산: 주 5일 이상 근무 시, (주간 기본근무시간 ÷ 5) × 시급
+function calcWeeklyHolidayPay(weekBaseHours, weekDays, wage) {
+  if (weekDays < 5) return 0
+  return Math.round((weekBaseHours / 5) * wage)
 }
 
 function getCalendarDays(year, month) {
@@ -121,15 +121,15 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
     let totalWeeklyHolidayPay = 0
     const calDays = getCalendarDays(y, m)
     for (let wi = 0; wi < calDays.length; wi += 7) {
-      let weekHours = 0
+      let weekHours = 0, weekDays = 0
       for (let di = wi; di < wi + 7 && di < calDays.length; di++) {
         const d = calDays[di]
         if (!d) continue
         const ds = `${currentMonth}-${String(d).padStart(2, '0')}`
         const log = monthLogs.find(l => l.date === ds)
-        if (log) weekHours += Math.min(log.hours, overtimeBase) // 기본근무시간만
+        if (log) { weekHours += Math.min(log.hours, overtimeBase); weekDays++ }
       }
-      totalWeeklyHolidayPay += calcWeeklyHolidayPay(weekHours, hourlyWage)
+      totalWeeklyHolidayPay += calcWeeklyHolidayPay(weekHours, weekDays, hourlyWage)
     }
 
     const grossPay = normalPay + overtimePay + totalWeeklyHolidayPay
@@ -240,6 +240,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
             const cells = []
             let weekPay = 0
             let weekBaseHours = 0
+            let weekWorkDays = 0
             calendarDays.forEach((day, i) => {
               if (!day) {
                 cells.push(<div key={`e${i}`} className="cal-cell empty" />)
@@ -257,6 +258,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
                   const ot = Math.max(0, h - overtimeBase)
                   weekPay += Math.round(normal * hourlyWage + ot * hourlyWage * overtimeRate)
                   weekBaseHours += normal
+                  weekWorkDays++
                 }
 
                 cells.push(
@@ -278,7 +280,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
 
               // 주 마지막 (토요일 = 7번째 열)에 주급 + 주휴수당 표시
               if ((i + 1) % 7 === 0 && i >= 7) {
-                const holidayPay = calcWeeklyHolidayPay(weekBaseHours, hourlyWage)
+                const holidayPay = calcWeeklyHolidayPay(weekBaseHours, weekWorkDays, hourlyWage)
                 if (weekPay > 0) {
                   cells.push(
                     <div key={`week${i}`} className="cal-week-pay">
@@ -291,6 +293,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
                 }
                 weekPay = 0
                 weekBaseHours = 0
+                weekWorkDays = 0
               }
             })
             return cells
