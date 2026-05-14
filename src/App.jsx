@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import WorkTab from './WorkTab'
-import { cloudSave, cloudRestore } from './supabase'
+import { cloudSave, cloudRestore, cloudLoad } from './supabase'
 import './App.css'
 
 const VISION_API_KEY = 'AIzaSyD9wyKx-SB9mADrhRGFHhVmRIsCPdfT6MM'
@@ -478,6 +478,7 @@ function App() {
     saveTimerRef.current = setTimeout(async () => {
       const ok = await cloudSave(userId)
       if (ok) {
+        localStorage.setItem('hb-last-sync', new Date().toISOString())
         setCloudStatus('saved')
         setTimeout(() => setCloudStatus(''), 2000)
       }
@@ -519,6 +520,32 @@ function App() {
       setCloudMessage('데이터가 없거나 불러오기 실패.')
     }
   }
+
+  // 앱 시작 시 클라우드에서 자동 불러오기
+  useEffect(() => {
+    const userId = localStorage.getItem('hb-cloud-id')
+    if (!userId) return
+    ;(async () => {
+      try {
+        const result = await cloudLoad(userId)
+        if (result && result.data) {
+          // 클라우드가 더 최근이면 적용
+          const localTime = localStorage.getItem('hb-last-sync') || ''
+          if (result.updated_at > localTime) {
+            Object.entries(result.data).forEach(([key, val]) => {
+              if (val !== null && val !== undefined) {
+                localStorage.setItem(key, val)
+              }
+            })
+            localStorage.setItem('hb-last-sync', result.updated_at)
+            window.location.reload()
+          }
+        }
+      } catch (e) {
+        console.error('Auto cloud restore failed:', e)
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('household-book', JSON.stringify(entries))
@@ -748,7 +775,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v1.9</span></h1>
+          <h1>가계부 <span className="app-version">v2.0</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
