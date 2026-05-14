@@ -803,7 +803,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v2.3</span></h1>
+          <h1>가계부 <span className="app-version">v2.4</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             {cloudStatus === 'error' && <span className="cloud-indicator error">☁️✗</span>}

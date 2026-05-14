@@ -1088,6 +1088,13 @@ header h1 {
   background: none;
 }
 
+.cal-holiday-pay {
+  font-size: 10px;
+  color: #2980b9;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
 .cal-day {
   font-size: 12px;
   font-weight: 600;

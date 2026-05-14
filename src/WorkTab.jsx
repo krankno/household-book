@@ -13,6 +13,12 @@ function formatMoney(amount) {
   return new Intl.NumberFormat('ko-KR').format(Math.round(amount))
 }
 
+// 주휴수당 계산: 주 15시간 이상 근무 시, (주간 근무시간 ÷ 5) × 시급
+function calcWeeklyHolidayPay(weekHours, wage) {
+  if (weekHours < 15) return 0
+  return Math.round((weekHours / 5) * wage)
+}
+
 function getCalendarDays(year, month) {
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
@@ -110,7 +116,23 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
 
     const normalPay = Math.round(totalNormal * hourlyWage)
     const overtimePay = Math.round(totalOvertime * hourlyWage * overtimeRate)
-    const grossPay = normalPay + overtimePay
+
+    // 주휴수당: 주 단위로 계산 (일~토 기준)
+    let totalWeeklyHolidayPay = 0
+    const calDays = getCalendarDays(y, m)
+    for (let wi = 0; wi < calDays.length; wi += 7) {
+      let weekHours = 0
+      for (let di = wi; di < wi + 7 && di < calDays.length; di++) {
+        const d = calDays[di]
+        if (!d) continue
+        const ds = `${currentMonth}-${String(d).padStart(2, '0')}`
+        const log = monthLogs.find(l => l.date === ds)
+        if (log) weekHours += Math.min(log.hours, overtimeBase) // 기본근무시간만
+      }
+      totalWeeklyHolidayPay += calcWeeklyHolidayPay(weekHours, hourlyWage)
+    }
+
+    const grossPay = normalPay + overtimePay + totalWeeklyHolidayPay
 
     // 고용보험 등 비율 공제
     let percentDeduction = 0
@@ -133,7 +155,8 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
     return {
       totalHours, totalNormal, totalOvertime, normalPay, overtimePay, grossPay,
       totalDeduction, deductionDetails, netPay, workDays,
-      incomeTaxTotal, localTaxTotal, totalDailyIncomeTax, dailyDetails
+      incomeTaxTotal, localTaxTotal, totalDailyIncomeTax, dailyDetails,
+      totalWeeklyHolidayPay
     }
   }, [monthLogs, hourlyWage, overtimeBase, overtimeRate, deductions])
 
@@ -216,6 +239,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
           {(() => {
             const cells = []
             let weekPay = 0
+            let weekBaseHours = 0
             calendarDays.forEach((day, i) => {
               if (!day) {
                 cells.push(<div key={`e${i}`} className="cal-cell empty" />)
@@ -232,6 +256,7 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
                   const normal = Math.min(h, overtimeBase)
                   const ot = Math.max(0, h - overtimeBase)
                   weekPay += Math.round(normal * hourlyWage + ot * hourlyWage * overtimeRate)
+                  weekBaseHours += normal
                 }
 
                 cells.push(
@@ -251,18 +276,21 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
                 )
               }
 
-              // 주 마지막 (토요일 = 7번째 열)에 주급 표시
+              // 주 마지막 (토요일 = 7번째 열)에 주급 + 주휴수당 표시
               if ((i + 1) % 7 === 0 && i >= 7) {
+                const holidayPay = calcWeeklyHolidayPay(weekBaseHours, hourlyWage)
                 if (weekPay > 0) {
                   cells.push(
                     <div key={`week${i}`} className="cal-week-pay">
                       <span>{formatMoney(weekPay)}원</span>
+                      {holidayPay > 0 && <span className="cal-holiday-pay">+주휴 {formatMoney(holidayPay)}원</span>}
                     </div>
                   )
                 } else {
                   cells.push(<div key={`week${i}`} className="cal-week-pay empty" />)
                 }
                 weekPay = 0
+                weekBaseHours = 0
               }
             })
             return cells
@@ -280,6 +308,12 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
           <span>연장수당 ({calc.totalOvertime}h × {formatMoney(hourlyWage)}원 × {overtimeRate})</span>
           <span className="income-text">{formatMoney(calc.overtimePay)}원</span>
         </div>
+        {calc.totalWeeklyHolidayPay > 0 && (
+          <div className="breakdown-row">
+            <span>주휴수당</span>
+            <span className="income-text">{formatMoney(calc.totalWeeklyHolidayPay)}원</span>
+          </div>
+        )}
         <div className="breakdown-row total-row">
           <span>총 급여</span>
           <span className="income-text">{formatMoney(calc.grossPay)}원</span>
