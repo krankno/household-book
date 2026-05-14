@@ -1071,6 +1071,23 @@ header h1 {
   outline-offset: -2px;
 }
 
+.cal-week-pay {
+  grid-column: 1 / -1;
+  text-align: right;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #27ae60;
+  background: linear-gradient(90deg, transparent 0%, #e8f5e9 40%);
+  border-radius: 4px;
+  min-height: 20px;
+}
+
+.cal-week-pay.empty {
+  min-height: 4px;
+  background: none;
+}
+
 .cal-day {
   font-size: 12px;
   font-weight: 600;

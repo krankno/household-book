@@ -213,31 +213,60 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
           {['일', '월', '화', '수', '목', '금', '토'].map(d => (
             <div key={d} className={`cal-dow ${d === '일' ? 'sun' : d === '토' ? 'sat' : ''}`}>{d}</div>
           ))}
-          {calendarDays.map((day, i) => {
-            if (!day) return <div key={`e${i}`} className="cal-cell empty" />
-            const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`
-            const log = logsByDate[dateStr]
-            const isToday = dateStr === today
-            const dayOfWeek = (new Date(y, m - 1, day)).getDay()
-            const isSun = dayOfWeek === 0
-            const isSat = dayOfWeek === 6
+          {(() => {
+            const cells = []
+            let weekPay = 0
+            calendarDays.forEach((day, i) => {
+              if (!day) {
+                cells.push(<div key={`e${i}`} className="cal-cell empty" />)
+              } else {
+                const dateStr = `${currentMonth}-${String(day).padStart(2, '0')}`
+                const log = logsByDate[dateStr]
+                const isToday = dateStr === today
+                const dayOfWeek = (new Date(y, m - 1, day)).getDay()
+                const isSun = dayOfWeek === 0
+                const isSat = dayOfWeek === 6
 
-            return (
-              <div
-                key={day}
-                className={`cal-cell ${log ? 'has-log' : ''} ${isToday ? 'today' : ''}`}
-                onClick={() => handleCalendarClick(day)}
-              >
-                <span className={`cal-day ${isSun ? 'sun' : isSat ? 'sat' : ''}`}>{day}</span>
-                {log && (
-                  <>
-                    <span className="cal-hours">{log.hours}h</span>
-                    {log.hours > overtimeBase && <span className="cal-ot">+{(log.hours - overtimeBase)}연장</span>}
-                  </>
-                )}
-              </div>
-            )
-          })}
+                if (log) {
+                  const h = log.hours
+                  const normal = Math.min(h, overtimeBase)
+                  const ot = Math.max(0, h - overtimeBase)
+                  weekPay += Math.round(normal * hourlyWage + ot * hourlyWage * overtimeRate)
+                }
+
+                cells.push(
+                  <div
+                    key={day}
+                    className={`cal-cell ${log ? 'has-log' : ''} ${isToday ? 'today' : ''}`}
+                    onClick={() => handleCalendarClick(day)}
+                  >
+                    <span className={`cal-day ${isSun ? 'sun' : isSat ? 'sat' : ''}`}>{day}</span>
+                    {log && (
+                      <>
+                        <span className="cal-hours">{log.hours}h</span>
+                        {log.hours > overtimeBase && <span className="cal-ot">+{(log.hours - overtimeBase)}연장</span>}
+                      </>
+                    )}
+                  </div>
+                )
+              }
+
+              // 주 마지막 (토요일 = 7번째 열)에 주급 표시
+              if ((i + 1) % 7 === 0 && i >= 7) {
+                if (weekPay > 0) {
+                  cells.push(
+                    <div key={`week${i}`} className="cal-week-pay">
+                      <span>{formatMoney(weekPay)}원</span>
+                    </div>
+                  )
+                } else {
+                  cells.push(<div key={`week${i}`} className="cal-week-pay empty" />)
+                }
+                weekPay = 0
+              }
+            })
+            return cells
+          })()}
         </div>
       </div>
 
