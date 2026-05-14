@@ -476,11 +476,21 @@ function App() {
     if (!userId) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
-      const ok = await cloudSave(userId)
-      if (ok) {
-        localStorage.setItem('hb-last-sync', new Date().toISOString())
-        setCloudStatus('saved')
-        setTimeout(() => setCloudStatus(''), 2000)
+      try {
+        const ok = await cloudSave(userId)
+        if (ok) {
+          localStorage.setItem('hb-last-sync', new Date().toISOString())
+          setCloudStatus('saved')
+          setTimeout(() => setCloudStatus(''), 2000)
+        } else {
+          console.warn('Cloud auto-save returned false')
+          setCloudStatus('error')
+          setTimeout(() => setCloudStatus(''), 3000)
+        }
+      } catch (e) {
+        console.error('Cloud auto-save error:', e)
+        setCloudStatus('error')
+        setTimeout(() => setCloudStatus(''), 3000)
       }
     }, 3000)
   }, [])
@@ -775,9 +785,10 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v2.0</span></h1>
+          <h1>가계부 <span className="app-version">v2.1</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
+            {cloudStatus === 'error' && <span className="cloud-indicator error">☁️✗</span>}
             <button className="settings-btn" onClick={() => setShowCloudSync(true)}>☁️</button>
             <button className="settings-btn" onClick={() => setShowCategoryManager(true)}>⚙️</button>
           </div>
