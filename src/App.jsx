@@ -170,11 +170,43 @@ async function parseReceiptText(text, categories) {
   // ==========================================
   // 1단계: 카드 알림 패턴 (한국 카드사 SMS/알림)
   // ==========================================
-  // 패턴: "승인 27,500원", "승인 11,000원 일시불"
+  const cardResults = []
+
+  // 1-A: 자동납부 패턴 — "자동납부 승인 김*민님 LG유플러스통신요 ... 159,620원"
+  const autoPayPattern = /자동납부\s*승인\s*\S+님\s*(.*?)\s*([\d,]+)\s*원/g
+  let autoMatch
+  while ((autoMatch = autoPayPattern.exec(fullText)) !== null) {
+    const rawName = autoMatch[1].replace(/-\*\*[\d-]+/g, '').trim()  // 카드번호 제거
+    const amt = parseInt(autoMatch[2].replace(/,/g, ''), 10)
+    if (amt >= 100 && amt < 100000000) {
+      // 상호명 정리: 불필요한 부분 제거
+      const skipAutoWords = /^(자동납부|승인|김|님)/
+      const words = rawName.match(/[가-힣a-zA-Z][가-힣a-zA-Z0-9.]{1,}/g) || []
+      let storeName = ''
+      for (const w of words) {
+        if (!skipAutoWords.test(w)) {
+          storeName = w
+          break
+        }
+      }
+      cardResults.push({
+        category: guessCategory((storeName || '자동납부') + ' 자동납부', categories),
+        amount: amt,
+        memo: storeName ? `${storeName} (자동납부)` : '자동납부',
+        date: receiptDate,
+      })
+    }
+  }
+
+  // 1-B: 일반 카드 승인 패턴 — "승인 27,500원", "승인 11,000원 일시불"
   const cardKrwPattern = /승인\s*([\d,]+)\s*원/g
   let cardMatch
-  const cardResults = []
   while ((cardMatch = cardKrwPattern.exec(fullText)) !== null) {
+    // 자동납부로 이미 파싱된 영역이면 스킵
+    const matchStart = cardMatch.index
+    const isAutoPay = fullText.lastIndexOf('자동납부', matchStart) >= matchStart - 20
+    if (isAutoPay) continue
+
     const amt = parseInt(cardMatch[1].replace(/,/g, ''), 10)
     if (amt >= 100 && amt < 100000000) {
       // 해당 금액 주변에서 가맹점명 찾기
