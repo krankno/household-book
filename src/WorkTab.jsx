@@ -281,11 +281,12 @@ export default function WorkTab({ currentMonth, changeMonth, monthLabel, onDataC
               // 주 마지막 (토요일 = 7번째 열)에 주급 + 주휴수당 표시
               if ((i + 1) % 7 === 0 && i >= 7) {
                 const holidayPay = calcWeeklyHolidayPay(weekBaseHours, weekWorkDays, hourlyWage)
+                const weekTotal = weekPay + holidayPay
                 if (weekPay > 0) {
                   cells.push(
                     <div key={`week${i}`} className="cal-week-pay">
-                      <span>{formatMoney(weekPay)}원</span>
-                      {holidayPay > 0 && <span className="cal-holiday-pay">+주휴 {formatMoney(holidayPay)}원</span>}
+                      <span>{formatMoney(weekTotal)}원</span>
+                      {holidayPay > 0 && <span className="cal-holiday-pay">(주휴 {formatMoney(holidayPay)})</span>}
                     </div>
                   )
                 } else {
