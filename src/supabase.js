@@ -15,6 +15,7 @@ const SYNC_KEYS = [
   'hb-overtime-rate',
   'hb-work-logs',
   'hb-deductions',
+  'hb-cloud-id',
 ]
 
 // 디바이스 고유 ID (첫 실행 시 생성)

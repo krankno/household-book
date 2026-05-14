@@ -500,10 +500,12 @@ function App() {
     const id = cloudId.trim()
     if (!id) return
     localStorage.setItem('hb-cloud-id', id)
+    document.cookie = `hb-cloud-id=${encodeURIComponent(id)}; max-age=${365 * 24 * 3600}; path=/; SameSite=Strict`
     setCloudStatus('saving')
     setCloudMessage('')
     const ok = await cloudSave(id)
     if (ok) {
+      localStorage.setItem('hb-last-sync', new Date().toISOString())
       setCloudStatus('saved')
       setCloudMessage('저장 완료!')
     } else {
@@ -531,10 +533,26 @@ function App() {
     }
   }
 
-  // 앱 시작 시 클라우드에서 자동 불러오기
+  // 앱 시작 시 클라우드 ID 복구 + 자동 불러오기
   useEffect(() => {
-    const userId = localStorage.getItem('hb-cloud-id')
-    if (!userId) return
+    let userId = localStorage.getItem('hb-cloud-id')
+
+    // localStorage가 삭제된 경우 → 쿠키에서 복구 시도
+    if (!userId) {
+      const cookieMatch = document.cookie.match(/hb-cloud-id=([^;]+)/)
+      if (cookieMatch) {
+        userId = decodeURIComponent(cookieMatch[1])
+        localStorage.setItem('hb-cloud-id', userId)
+        setCloudId(userId)
+        setCloudStatus('restored')
+        setTimeout(() => setCloudStatus(''), 3000)
+      } else {
+        return
+      }
+    }
+
+    // 쿠키에 백업 (1년 유효)
+    document.cookie = `hb-cloud-id=${encodeURIComponent(userId)}; max-age=${365 * 24 * 3600}; path=/; SameSite=Strict`
     ;(async () => {
       try {
         const result = await cloudLoad(userId)
@@ -785,7 +803,7 @@ function App() {
     <div className="app">
       <header>
         <div className="header-row">
-          <h1>가계부 <span className="app-version">v2.1</span></h1>
+          <h1>가계부 <span className="app-version">v2.2</span></h1>
           <div className="header-btns">
             {cloudStatus === 'saved' && <span className="cloud-indicator saved">☁️✓</span>}
             {cloudStatus === 'error' && <span className="cloud-indicator error">☁️✗</span>}
